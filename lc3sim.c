@@ -13,7 +13,7 @@
 /* These are the functions you'll have to write.               */
 /***************************************************************/
 
-void process_instruction();
+void process_intruction();
 
 /***************************************************************/
 /* A couple of useful definitions.                             */
@@ -64,7 +64,7 @@ System_Latches CURRENT_LATCHES, NEXT_LATCHES;
 /***************************************************************/
 /* A cycle counter.                                            */
 /***************************************************************/
-int INSTRUCTION_COUNT;
+int intruction_COUNT;
 
 /***************************************************************/
 /*                                                             */
@@ -76,7 +76,7 @@ int INSTRUCTION_COUNT;
 void help() {                                                    
   printf("----------------LC-3 ISIM Help-----------------------\n");
   printf("go               -  run program to completion         \n");
-  printf("run n            -  execute program for n instructions\n");
+  printf("run n            -  execute program for n intructions\n");
   printf("mdump low high   -  dump memory from low to high      \n");
   printf("rdump            -  dump the register & bus values    \n");
   printf("?                -  display this help menu            \n");
@@ -92,9 +92,9 @@ void help() {
 /***************************************************************/
 void cycle() {                                                
 
-  process_instruction();
+  process_intruction();
   CURRENT_LATCHES = NEXT_LATCHES;
-  INSTRUCTION_COUNT++;
+  intruction_COUNT++;
 }
 
 /***************************************************************/
@@ -182,7 +182,7 @@ void rdump(FILE * dumpsim_file) {
 
   printf("\nCurrent register/bus values :\n");
   printf("-------------------------------------\n");
-  printf("Instruction Count : %d\n", INSTRUCTION_COUNT);
+  printf("intruction Count : %d\n", intruction_COUNT);
   printf("PC                : 0x%.4x\n", CURRENT_LATCHES.PC);
   printf("CCs: N = %d  Z = %d  P = %d\n", CURRENT_LATCHES.N, CURRENT_LATCHES.Z, CURRENT_LATCHES.P);
   printf("Registers:\n");
@@ -193,7 +193,7 @@ void rdump(FILE * dumpsim_file) {
   /* dump the state information into the dumpsim file */
   fprintf(dumpsim_file, "\nCurrent register/bus values :\n");
   fprintf(dumpsim_file, "-------------------------------------\n");
-  fprintf(dumpsim_file, "Instruction Count : %d\n", INSTRUCTION_COUNT);
+  fprintf(dumpsim_file, "intruction Count : %d\n", intruction_COUNT);
   fprintf(dumpsim_file, "PC                : 0x%.4x\n", CURRENT_LATCHES.PC);
   fprintf(dumpsim_file, "CCs: N = %d  Z = %d  P = %d\n", CURRENT_LATCHES.N, CURRENT_LATCHES.Z, CURRENT_LATCHES.P);
   fprintf(dumpsim_file, "Registers:\n");
@@ -384,205 +384,255 @@ int main(int argc, char *argv[]) {
 
 /***************************************************************/
 
-
-
-#define SEXT(x, n) (((x) << (32 - n)) >> (32 - n))
-
-int fetch() {
-    int instr;
-    instr = MEMORY[CURRENT_LATCHES.PC];
-    NEXT_LATCHES.PC = CURRENT_LATCHES.PC + 1;
-    return instr;
+int x_to_32 (int x, int n) {
+    return (x << (32 - n)) >> (32 - n);
 }
 
-void SetCC(int dr) {
-    int val = NEXT_LATCHES.REGS[dr];
-    if ((val & 0x8000) >> 15) {
-        NEXT_LATCHES.N = 1;
-        NEXT_LATCHES.Z = 0;
-        NEXT_LATCHES.P = 0;
-    }
-    else {
-        if (val == 0) {
-            NEXT_LATCHES.N = 0;
-            NEXT_LATCHES.Z = 1;
-            NEXT_LATCHES.P = 0;
-        } else {
-            NEXT_LATCHES.N = 0;
-            NEXT_LATCHES.Z = 0;
-            NEXT_LATCHES.P = 1;
-        }
-    }
+int fetch(){
+  int insturction = MEMORY[CURRENT_LATCHES.PC];
+  NEXT_LATCHES.PC = CURRENT_LATCHES.PC + 1;
+  return insturction; 
 }
 
-void ADD(int instr) {
-    int dr = (instr >> 9) & 7;
-    int sr1 = (instr >> 6) & 7;
-    int immFlag = (instr >> 5) & 1;
-    int result;
-
-    if (immFlag) {
-        int imm5 = instr & 0x1F;
-        imm5 = SEXT(imm5, 5);
-        result = CURRENT_LATCHES.REGS[sr1] + imm5;
-    } else {
-        int sr2 = instr & 7;
-        result = CURRENT_LATCHES.REGS[sr1] + CURRENT_LATCHES.REGS[sr2];
-    }
-
-    NEXT_LATCHES.REGS[dr] = result;
-    SetCC(dr);
+void Set_Condition_Code(int dr){
+  int value = CURRENT_LATCHES.REGS[dr];
+  int sign = (value & 0x8000) >> 15;
+  if (value == 0){
+    NEXT_LATCHES.N = 0;
+    NEXT_LATCHES.Z = 1;
+    NEXT_LATCHES.P = 0;
+  }
+  else if (sign){
+    NEXT_LATCHES.N = 1;
+    NEXT_LATCHES.Z = 0;
+    NEXT_LATCHES.P = 0;
+  }
+  else {
+    NEXT_LATCHES.N = 0;
+    NEXT_LATCHES.Z = 0;
+    NEXT_LATCHES.P = 1;
+  }
 }
 
-void AND(int instr) {
-    int dr = (instr >> 9) & 7;
-    int sr1 = (instr >> 6) & 7;
-    int immFlag = (instr >> 5) & 1;
-
-    if (immFlag) {
-        int imm5 = instr & 0x1F;
-        imm5 = SEXT(imm5, 5);
-        NEXT_LATCHES.REGS[dr] = CURRENT_LATCHES.REGS[sr1] & imm5;
-    } else {
-        int sr2 = instr & 7;
-        NEXT_LATCHES.REGS[dr] = CURRENT_LATCHES.REGS[sr1] & CURRENT_LATCHES.REGS[sr2];
-    }
-
-    SetCC(dr);
+void ADD(int intruction){
+  int dr = intruction & 0x0E00 >> 9; 
+  int sr1 = intruction & 0x01C0 >> 6;
+  int sr2 = intruction & 0x0007;
+  int imm_flag = (intruction & 0x0020) >> 5;
+  int imm5 = intruction & 0x001F;
+  imm5 = x_to_32(imm5, 5);
+  
+  if (imm_flag) {
+    NEXT_LATCHES.REGS[dr] = CURRENT_LATCHES.REGS[sr1] + imm5;
+    NEXT_LATCHES.REGS[dr] = Low16bits(NEXT_LATCHES.REGS[dr]);
+  } else {
+    NEXT_LATCHES.REGS[dr] = CURRENT_LATCHES.REGS[sr1] + CURRENT_LATCHES.REGS[sr2];
+    NEXT_LATCHES.REGS[dr] = Low16bits(NEXT_LATCHES.REGS[dr]);
+  }
+  Set_Condition_Code(dr);
 }
 
-void BR(int instr) {
-    int n = (instr >> 11) & 1;
-    int z = (instr >> 10) & 1;
-    int p = (instr >> 9) & 1;
-    int offset = SEXT(instr & 0x1FF, 9);
-
-    if ((n && CURRENT_LATCHES.N) || (z && CURRENT_LATCHES.Z) || (p && CURRENT_LATCHES.P)) {
-        NEXT_LATCHES.PC += offset;
-    }
+void AND(int intruction){
+  int dr = (intruction & 0x0E00) >> 9; 
+  int sr1 = (intruction & 0x01C0) >> 6;
+  int sr2 = (intruction & 0x0007);
+  int imm_flag = (intruction & 0x0020) >> 5;
+  int imm5 = (intruction & 0x001F);
+  imm5 = x_to_32(imm5, 5);
+  
+  if (imm_flag) {
+    NEXT_LATCHES.REGS[dr] = CURRENT_LATCHES.REGS[sr1] & imm5;
+    NEXT_LATCHES.REGS[dr] = Low16bits(NEXT_LATCHES.REGS[dr]);
+  } else {
+    NEXT_LATCHES.REGS[dr] = CURRENT_LATCHES.REGS[sr1] & CURRENT_LATCHES.REGS[sr2];
+    NEXT_LATCHES.REGS[dr] = Low16bits(NEXT_LATCHES.REGS[dr]);
+  }
+  
+  Set_Condition_Code(dr);
 }
 
-void JMP(int instr) {
-    int base = (instr >> 6) & 7;
-    NEXT_LATCHES.PC = CURRENT_LATCHES.REGS[base];
+void BR(int intruction){
+  int n = (intruction & 0x0800) >> 11;
+  int z = (intruction & 0x0400) >> 10;
+  int p = (intruction & 0x0200) >> 9;
+  int offset = intruction & 0x01FF;
+  offset = x_to_32(offset, 9);
+  
+  if ((n && CURRENT_LATCHES.N) || (z && CURRENT_LATCHES.Z) || (p && CURRENT_LATCHES.P)){
+    NEXT_LATCHES.PC = NEXT_LATCHES.PC + offset;
+  }
 }
 
-void JSR(int instr) {
-    int longFlag = (instr >> 11) & 1;
-    if (longFlag) {
-        int offset = SEXT(instr & 0x7FF, 11);
-        NEXT_LATCHES.REGS[7] = NEXT_LATCHES.PC;
-        NEXT_LATCHES.PC += offset;
-    } else {
-        int base = (instr >> 6) & 7;
-        NEXT_LATCHES.REGS[7] = NEXT_LATCHES.PC;
-        NEXT_LATCHES.PC = CURRENT_LATCHES.REGS[base];
-    }
+void JMP(int intruction){
+  int base_r = (intruction & 0x01C0) >> 6;
+  NEXT_LATCHES.PC = CURRENT_LATCHES.REGS[base_r];
 }
 
-void LD(int instr) {
-    int dr = (instr >> 9) & 7;
-    int offset = SEXT(instr & 0x1FF, 9);
-    int addr = NEXT_LATCHES.PC + offset;
-    NEXT_LATCHES.REGS[dr] = MEMORY[addr];
-    SetCC(dr);
+void JSR(int intruction){
+  int long_flag = (intruction & 0x0800) >> 11;
+  int base_r = (intruction & 0x01C0) >> 6;
+  int offset = (intruction & 0x07FF);
+  offset = x_to_32(offset, 11);
+  
+  NEXT_LATCHES.REGS[7] = NEXT_LATCHES.PC;
+  
+  if (long_flag){
+    NEXT_LATCHES.PC = NEXT_LATCHES.PC + offset;
+  } else {
+    NEXT_LATCHES.PC = CURRENT_LATCHES.REGS[base_r];
+  }
 }
 
-void LDI(int instr) {
-    int dr = (instr >> 9) & 7;
-    int offset = SEXT(instr & 0x1FF, 9);
-    int ptr = MEMORY[NEXT_LATCHES.PC + offset];
-    NEXT_LATCHES.REGS[dr] = MEMORY[ptr];
-    SetCC(dr);
+void LD(int intruction){
+  int dr = (intruction & 0x0E00) >> 9;
+  int offset = (intruction & 0x01FF);
+  offset = x_to_32(offset, 9);
+  int address = CURRENT_LATCHES.PC + offset;
+  
+  NEXT_LATCHES.REGS[dr] = MEMORY[address];
+  NEXT_LATCHES.REGS[dr] = Low16bits(NEXT_LATCHES.REGS[dr]);
+  Set_Condition_Code(dr);
 }
 
-void LDR(int instr) {
-    int dr = (instr >> 9) & 7;
-    int base = (instr >> 6) & 7;
-    int offset = SEXT(instr & 0x3F, 6);
-    int addr = CURRENT_LATCHES.REGS[base] + offset;
-    NEXT_LATCHES.REGS[dr] = MEMORY[addr];
-    SetCC(dr);
+void LDI(int intruction){
+  int dr = (intruction & 0x0E00) >> 9;
+  int offset = (intruction & 0x01FF);
+  offset = x_to_32(offset, 9);
+  int address = MEMORY[CURRENT_LATCHES.PC + offset];
+  
+  NEXT_LATCHES.REGS[dr] = MEMORY[address];
+  NEXT_LATCHES.REGS[dr] = Low16bits(NEXT_LATCHES.REGS[dr]);
+  Set_Condition_Code(dr);
 }
 
-void LEA(int instr) {
-    int dr = (instr >> 9) & 7;
-    int offset = SEXT(instr & 0x1FF, 9);
-    NEXT_LATCHES.REGS[dr] = NEXT_LATCHES.PC + offset;
+void LDR(int intruction){
+  int dr = (intruction & 0x0E00) >> 9;
+  int base_r = (intruction & 0x01C0) >> 6;
+  int offset = (intruction & 0x003F);
+  offset = x_to_32(offset, 6);
+  
+  NEXT_LATCHES.REGS[dr] = MEMORY[CURRENT_LATCHES.REGS[base_r] + offset];
+  NEXT_LATCHES.REGS[dr] = Low16bits(NEXT_LATCHES.REGS[dr]);
+  Set_Condition_Code(dr);
 }
 
-void NOT(int instr) {
-    int dr = (instr >> 9) & 7;
-    int sr = (instr >> 6) & 7;
-    NEXT_LATCHES.REGS[dr] = ~CURRENT_LATCHES.REGS[sr];
-    SetCC(dr);
+void LEA(int intruction){
+  int dr = (intruction & 0x0E00) >> 9;
+  int offset = (intruction & 0x01FF);
+  offset = x_to_32(offset, 9);
+  
+  NEXT_LATCHES.REGS[dr] = CURRENT_LATCHES.PC + offset;
+  NEXT_LATCHES.REGS[dr] = Low16bits(NEXT_LATCHES.REGS[dr]);
+  //Set_Condition_Code(dr);
 }
 
-void ST(int instr) {
-    int sr = (instr >> 9) & 7;
-    int offset = SEXT(instr & 0x1FF, 9);
-    int addr = NEXT_LATCHES.PC + offset;
-    MEMORY[addr] = CURRENT_LATCHES.REGS[sr] & 0xFFFF;
+void NOT(int intruction){
+  int dr = (intruction & 0x0E00) >> 9;
+  int sr = (intruction & 0x01C0) >> 6;
+  
+  NEXT_LATCHES.REGS[dr] = ~CURRENT_LATCHES.REGS[sr];
+  NEXT_LATCHES.REGS[dr] = Low16bits(NEXT_LATCHES.REGS[dr]);
+  Set_Condition_Code(dr);
 }
 
-void STI(int instr) {
-    int sr = (instr >> 9) & 7;
-    int offset = SEXT(instr & 0x1FF, 9);
-    int addr = MEMORY[NEXT_LATCHES.PC + offset];
-    MEMORY[addr] = CURRENT_LATCHES.REGS[sr] & 0xFFFF;
+void ST(int intruction){
+  int sr = (intruction & 0x0E00) >> 9;
+  int offset = (intruction & 0x01FF);
+  offset = x_to_32(offset, 9);
+  int address = CURRENT_LATCHES.PC + offset;
+  MEMORY[address] = CURRENT_LATCHES.REGS[sr];
+  MEMORY[address] = Low16bits(MEMORY[address]);
+}
+void STI(int intruction){
+  int sr = (intruction & 0x0E00) >> 9;
+  int offset = (intruction & 0x01FF);
+  offset = x_to_32(offset, 9);
+  int address = MEMORY[CURRENT_LATCHES.PC + offset];
+  
+  MEMORY[address] = CURRENT_LATCHES.REGS[sr];
+  MEMORY[address] = Low16bits(MEMORY[address]);
 }
 
-void STR(int instr) {
-    int sr = (instr >> 9) & 7;
-    int base = (instr >> 6) & 7;
-    int offset = SEXT(instr & 0x3F, 6);
-    int addr = CURRENT_LATCHES.REGS[base] + offset;
-    MEMORY[addr] = CURRENT_LATCHES.REGS[sr] & 0xFFFF;
+void STR(int intruction){
+  int sr = (intruction & 0x0E00) >> 9;
+  int base_r = (intruction & 0x01C0) >> 6;
+  int offset = (intruction & 0x003F);
+  offset = x_to_32(offset, 6);
+  
+  MEMORY[CURRENT_LATCHES.REGS[base_r] + offset] = CURRENT_LATCHES.REGS[sr];
+  MEMORY[CURRENT_LATCHES.REGS[base_r] + offset] = Low16bits(MEMORY[CURRENT_LATCHES.REGS[base_r] + offset]);
 }
 
-void TRAP(int instr) {
-    int trapvect = instr & 0xFF;
-    NEXT_LATCHES.REGS[7] = NEXT_LATCHES.PC;
-    NEXT_LATCHES.PC = MEMORY[trapvect];
+void TRAP(int intruction){
+  int trapvect8 = intruction & 0x00FF;
+  NEXT_LATCHES.PC = MEMORY[trapvect8];
+  
+}
+void execute(int opcode, int intruction){
+  switch (opcode){
+  case 0b0001:
+    ADD(intruction);
+    break;
+  case 0b0101:
+    AND(intruction);
+    break;
+  case 0b0000:
+    BR(intruction);
+    break;
+  case 0b1100:
+    JMP(intruction);
+    break;
+  case 0b0100:
+    JSR(intruction);
+    break;
+  case 0b0010:
+    LD(intruction);
+    break;
+  case 0b1010:
+    LDI(intruction);
+    break;
+  case 0b0110:
+    LDR(intruction);
+    break;
+  case 0b1110:
+    LEA(intruction);
+    break;
+  case 0b1001:
+    NOT(intruction);
+    break;
+  case 0b0011:
+    ST(intruction);
+    break;
+  case 0b1011:
+    STI(intruction);
+    break;
+  case 0b0111:
+    STR(intruction);
+    break;
+  case 0b1111:
+    TRAP(intruction);
+    break;
+  default:
+    break;
+  }
+}
+int decode(int intruction){
+  int opcode = (intruction & 0xF000) >> 12;
+  return opcode;
 }
 
-void decode(int instr) {
-    int opcode = (instr >> 12) & 0xF;
-
-    if (opcode == 1) {
-        ADD(instr);
-    } else if (opcode == 5) {
-        AND(instr);
-    } else if (opcode == 0) {
-        BR(instr);
-    } else if (opcode == 12) {
-        JMP(instr);
-    } else if (opcode == 4) {
-        JSR(instr);
-    } else if (opcode == 2) {
-        LD(instr);
-    } else if (opcode == 10) {
-        LDI(instr);
-    } else if (opcode == 6) {
-        LDR(instr);
-    } else if (opcode == 14) {
-        LEA(instr);
-    } else if (opcode == 9) {
-        NOT(instr);
-    } else if (opcode == 3) {
-        ST(instr);
-    } else if (opcode == 11) {
-        STI(instr);
-    } else if (opcode == 7) {
-        STR(instr);
-    } else if (opcode == 15) {
-        TRAP(instr);
-    }
-}
-
-void process_instruction() {
-    int instr = fetch();
-    decode(instr);
-    CURRENT_LATCHES = NEXT_LATCHES;
+void process_intruction(){
+  /*  function: process_intruction
+   *  
+   *    Process one intruction at a time  
+   *       -Fetch one intruction
+   *       -Decode 
+   *       -Execute
+   *       -Update NEXT_LATCHES
+   */     
+  int intruction = fetch();
+  int opcode = decode(intruction);
+  execute(opcode, intruction);
+  CURRENT_LATCHES = NEXT_LATCHES;
 }
 
